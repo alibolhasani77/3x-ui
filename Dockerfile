@@ -1,15 +1,11 @@
-# ========================================================
+# =======================
 # Stage: Builder
-# ========================================================
+# =======================
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
 ARG TARGETARCH
 
-RUN apk --no-cache --update add \
-  build-base \
-  gcc \
-  wget \
-  unzip
+RUN apk --no-cache add build-base gcc wget unzip
 
 COPY . .
 
@@ -18,25 +14,21 @@ ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 RUN go build -ldflags "-w -s" -o build/x-ui main.go
 RUN ./DockerInit.sh "$TARGETARCH"
 
-# ========================================================
-# Stage: Final Image of 3x-ui
-# ========================================================
+# =======================
+# Stage: Final Image
+# =======================
 FROM alpine
+
 ENV TZ=Asia/Tehran
 WORKDIR /app
 
-RUN apk add --no-cache --update \
-  ca-certificates \
-  tzdata \
-  fail2ban \
-  bash
+RUN apk add --no-cache ca-certificates tzdata fail2ban bash
 
 COPY --from=builder /app/build/ /app/
 COPY --from=builder /app/DockerEntrypoint.sh /app/
 COPY --from=builder /app/x-ui.sh /usr/bin/x-ui
 
-
-# Configure fail2ban
+# اصلاح تنظیمات fail2ban
 RUN rm -f /etc/fail2ban/jail.d/alpine-ssh.conf \
   && cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local \
   && sed -i "s/^\[ssh\]$/&\nenabled = false/" /etc/fail2ban/jail.local \
@@ -48,6 +40,9 @@ RUN chmod +x \
   /app/x-ui \
   /usr/bin/x-ui
 
-ENV XUI_ENABLE_FAIL2BAN="true"
-CMD [ "./x-ui" ]
-ENTRYPOINT [ "/app/DockerEntrypoint.sh" ]
+ENV XUI_ENABLE_FAIL2BAN=true
+ENV XUI_PORT=8080
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/x-ui", "-port", "8080"]
